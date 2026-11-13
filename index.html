@@ -552,10 +552,11 @@ function allView(me){
 
 // ---------- admin ----------
 let draft=null;
+const exList=()=>(cfg?.exclusions||[]).map(x=>Array.isArray(x)?[...x]:[x.a,x.b]);
 function adminView(first){
   if(!draft) draft = { limit: cfg?.limit ?? 150, currency: cfg?.currency || 'A$', dateText: cfg?.dateText || '',
     people: cfg?.people?.length ? cfg.people.map(p=>({...p})) : ['Grant','Matt','Peter','Zach','Ben','Ray (Mother)'].map(n=>({k:uid6(),name:n})),
-    exclusions: (cfg?.exclusions||[]).map(x=>[...x]) };
+    exclusions: exList() };
   if(!draft.people.length) draft.people=[{k:uid6(),name:''}];
   const named = draft.people.filter(p=>p.name.trim());
   return `<div class="card"><h2>${first?'Set the stage':"Mother's desk"}</h2><p class="sub">Only you see this. Set the rules, add the divas, then draw.</p>
@@ -607,7 +608,7 @@ function bindAdmin(){
     if(!adminHash){ const pw=$('#aPw')?.value||''; if(pw.length<6) return toast('Set a Mother password (6+ characters).'); adminHash=await sha('admin:'+pw); LS.set('admin',adminHash); }
     const keys=new Set(ppl.map(p=>p.k));
     const next={...(cfg||{}), limit:draft.limit===''?'':Number(draft.limit), currency:draft.currency.trim()||'$', dateText:draft.dateText.trim(), people:ppl,
-      exclusions:draft.exclusions.filter(x=>keys.has(x[0])&&keys.has(x[1])), drawn:cfg?.drawn||false, pairs:cfg?.pairs||{}, adminHash};
+      exclusions:draft.exclusions.filter(x=>keys.has(x[0])&&keys.has(x[1])).map(x=>({a:x[0],b:x[1]})), drawn:cfg?.drawn||false, pairs:cfg?.pairs||{}, adminHash};
     try{ await db.doc('config/main').set(next); draft=null; toast('Saved. The stage is set 💅'); }catch(e){ writeFail(e); }
   };
   const pw=$('#aPwSave'); if(pw) pw.onclick=async()=>{ const v=$('#aNewPw').value; if(v.length<6) return toast('6+ characters, darling.');
@@ -616,7 +617,7 @@ function bindAdmin(){
   const pl=$('#aPlay'); if(pl) pl.onclick=()=>{ tab=myKey()?'list':'pick'; render(); };
   const lo=$('#aOut'); if(lo) lo.onclick=()=>{ LS.set('admin',null); isOwner=false; tab=myKey()?'list':'pick'; render(); };
   const d=$('#aDraw'); if(d) d.onclick=()=>{
-    const go=async()=>{ SND.play('whoosh'); const pairs=drawNames(people().map(p=>p.k), cfg.exclusions||[]);
+    const go=async()=>{ SND.play('whoosh'); const pairs=drawNames(people().map(p=>p.k), exList());
       if(!pairs) return toast('No valid draw with those “never pair” rules. Loosen one.');
       try{ await db.doc('config/main').set({...cfg, drawn:true, pairs, drawnAt:Date.now()}); toast('Names drawn! Tell the girls to check “My giftee” 🎁'); SND.play('oooh'); SND.say('drawn'); }catch(e){ writeFail(e); } };
     cfg.drawn ? confirmBox('Redraw everyone?','Everyone gets a new giftee. Anyone who already looked will need to look again.',go) : go();
