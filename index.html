@@ -561,7 +561,7 @@ function adminView(first){
   return `<div class="card"><h2>${first?'Set the stage':"Mother's desk"}</h2><p class="sub">Only you see this. Set the rules, add the divas, then draw.</p>
     <div class="row"><div><label>Gift limit</label><input id="aLim" type="number" inputmode="decimal" min="0" value="${esc(draft.limit)}"></div>
     <div style="max-width:90px"><label>Currency</label><input id="aCur" maxlength="3" value="${esc(draft.currency)}"></div></div>
-    ${first&&!cfg?.adminHash?`<label>Mother password (unlocks this desk — don't lose it)</label><input id="aPw" type="password" placeholder="at least 6 characters">`:''}
+    ${first&&!cfg?.adminHash?`<label>Mother password (unlocks this desk — don't lose it)</label><input id="aPw" type="password" placeholder="at least 6 characters">`:`<label>Change Mother password (leave blank to keep it)</label><input id="aPw2" type="password" placeholder="new password, 6+ characters">`}
     <label>Exchange date / place (everyone sees this)</label><input id="aDate" maxlength="60" placeholder="e.g. Sat 20 Dec, Ray's place" value="${esc(draft.dateText)}">
     <label>The divas</label><div class="plist" id="plist">${draft.people.map((p,i)=>`<div class="prow"><input data-pi="${i}" maxlength="24" placeholder="Name" value="${esc(p.name)}">
       <span class="st">${claims[p.k]?.pinHash||claimData[p.k]?.pinHash?'joined ✓':''}</span>
@@ -603,6 +603,7 @@ function bindAdmin(){
     if(ppl.length<2) return toast('You need at least two divas, honey.');
     const lower=ppl.map(p=>p.name.toLowerCase()); if(new Set(lower).size!==lower.length) return toast('Two divas share a name — add an initial.');
     let adminHash=cfg?.adminHash;
+    const npw=$('#aPw2')?.value||''; if(npw){ if(npw.length<6) return toast('New password needs 6+ characters.'); adminHash=await sha('admin:'+npw); LS.set('admin',adminHash); }
     if(!adminHash){ const pw=$('#aPw')?.value||''; if(pw.length<6) return toast('Set a Mother password (6+ characters).'); adminHash=await sha('admin:'+pw); LS.set('admin',adminHash); }
     const keys=new Set(ppl.map(p=>p.k));
     const next={...(cfg||{}), limit:draft.limit===''?'':Number(draft.limit), currency:draft.currency.trim()||'$', dateText:draft.dateText.trim(), people:ppl,
