@@ -228,6 +228,16 @@ const SND=(()=>{
     spin(dur){ const a=ctx(); if(!a) return; const t0=a.currentTime; // decelerating ticks
       let t=0, n=0; while(t<dur-.1 && n<90){ const p=t/dur; const gap=.035+Math.pow(p,2.2)*.42; noise(t0+t,.03,{vol:.35,hp:3000}); tone(1200,t0+t,.03,{type:'square',vol:.04}); t+=gap; n++; }
       for(let i=0;i<dur*16;i++) noise(t0+i/16,.07,{vol:.05+.08*(i/(dur*16)),bp:180}); },
+    oooh(){ const a=ctx(); if(!a) return; const t=a.currentTime;
+      [196,247,294,330,392,440].forEach((f,i)=>{ const o=a.createOscillator(), g=a.createGain(), fl=a.createBiquadFilter();
+        o.type='sawtooth'; o.frequency.setValueAtTime(f*.85,t); o.frequency.linearRampToValueAtTime(f*1.12,t+.55); o.frequency.linearRampToValueAtTime(f*.9,t+1.3);
+        o.detune.value=(Math.random()-.5)*40; fl.type='bandpass'; fl.frequency.value=420; fl.Q.value=4;
+        g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(.05,t+.25+i*.02); g.gain.exponentialRampToValueAtTime(.0001,t+1.4);
+        o.connect(fl); fl.connect(g); g.connect(master); o.start(t); o.stop(t+1.5); }); },
+    applause(d=2.6){ const a=ctx(); if(!a) return; const t=a.currentTime; for(let i=0;i<d*70;i++){ const at=t+Math.random()*d, fade=1-(at-t)/d; noise(at,.03,{vol:.18*fade+.03,bp:1200+Math.random()*2500}); }
+      [0,.15].forEach(dt=>{ const o=a.createOscillator(), g=a.createGain(); o.type='sine'; o.frequency.setValueAtTime(1800,t+.3+dt); o.frequency.exponentialRampToValueAtTime(2600,t+.6+dt); o.frequency.exponentialRampToValueAtTime(1400,t+.9+dt);
+        g.gain.setValueAtTime(0,t+.3+dt); g.gain.linearRampToValueAtTime(.06,t+.35+dt); g.gain.exponentialRampToValueAtTime(.0001,t+.95+dt); o.connect(g); g.connect(master); o.start(t+.3+dt); o.stop(t+1+dt); }); },
+    gasp(){ const t=now(); noise(t,.35,{vol:.3,bp:2200}); },
     fanfare(){ const a=ctx(); if(!a) return; const t=a.currentTime+.05;
       noise(t,.12,{vol:.5,bp:200}); tone(60,t,.25,{vol:.6,glide:40});
       [[523,0],[659,.12],[784,.24]].forEach(([f,d])=>{ tone(f,t+d,.18,{type:'sawtooth',vol:.12,cut:2400}); tone(f*1.005,t+d,.18,{type:'sawtooth',vol:.08,cut:2400}); });
@@ -254,7 +264,28 @@ const SND=(()=>{
       melTimes.forEach(([at,n,d])=>{ if(at===e) { tone(N[n],nextT,d*E8*.95,{type:'square',vol:.06,cut:3000}); tone(N[n]*2,nextT,d*E8*.6,{vol:.03}); } });
       nextT+=E8; step++; } }
   function music(on){ musOn=on; clearInterval(musTimer); if(on){ const a=ctx(); if(!a) return; nextT=a.currentTime+.1; step=0; musTimer=setInterval(schedule,60); } }
-  return { play:(k,...a)=>{ if(sfxOn) try{ fx[k](...a); }catch{} }, setSfx:v=>{sfxOn=v; LS.set('sfx',v?'1':'0');}, get sfx(){return sfxOn}, music, get musOn(){return musOn} };
+  // ---- sassy voice lines (original, spoken by the device's own voice) ----
+  let voice=null;
+  const pickVoice=()=>{ try{ const vs=speechSynthesis.getVoices(); const pref=['Karen','Samantha','Moira','Tessa','Serena','Kate','Google UK English Female','Microsoft Natasha','Microsoft Libby'];
+    voice = pref.map(n=>vs.find(v=>v.name.includes(n))).find(Boolean) || vs.find(v=>/en[-_](AU|GB)/i.test(v.lang)) || vs.find(v=>/^en/i.test(v.lang)) || null; }catch{} };
+  try{ pickVoice(); speechSynthesis.onvoiceschanged=pickVoice; }catch{}
+  const LINES={
+    spin:['Hold onto your wigs, darlings!','Spin it like your rent is due!','Ooh, the suspense is giving me wrinkles.','Round and round she goes, honey!','Mother is watching. Spin with intention.'],
+    reveal:['The wheel has spoken. It\'s {g}!','Oh honey, you got {g}! Gift wisely.','{g}! Gift wrap your feelings and get shopping.','It\'s {g}, darling! No refunds, no regifts, no beige.','Ding ding ding! {g} is all yours, sweetie.'],
+    over:['A hundred and fifty, sweetie. Not a cent more!','Champagne taste on a tinsel budget, I see.','Over budget? In this economy? Put it back.','Darling, that\'s a whole mortgage repayment.'],
+    saved:['Gorgeous. Noted.','Obsessed.','Ask and you shall slay.','Ooh, somebody has taste.','Added. Your Kringle has been warned.'],
+    join:['Welcome to the stage, {n}!','{n} has entered the building!','Look who decided to show up. Hello, {n}!','{n}, darling! The glitter was waiting for you.'],
+    del:['Gone, like last season.','Deleted. We never speak of it again.','Into the bin, babe.'],
+    drawn:['Mother has spoken. The names are drawn!','It is done, darlings. Go and spin.'],
+    over_draw:[]
+  };
+  let lastSay=0;
+  function say(kind,vars={}){ if(!sfxOn) return; try{ const L=LINES[kind]; if(!L?.length||!('speechSynthesis' in window)) return;
+      if(kind==='over' && Date.now()-lastSay<4000) return; lastSay=Date.now();
+      let line=L[Math.floor(Math.random()*L.length)].replace('{g}',vars.g||'').replace('{n}',vars.n||'');
+      speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(line); if(voice) u.voice=voice; u.lang=voice?.lang||'en-AU';
+      u.pitch=1.35; u.rate=1.02; u.volume=1; speechSynthesis.speak(u); }catch{} }
+  return { say, play:(k,...a)=>{ if(sfxOn) try{ fx[k](...a); }catch{} }, setSfx:v=>{sfxOn=v; LS.set('sfx',v?'1':'0');}, get sfx(){return sfxOn}, music, get musOn(){return musOn} };
 })();
 const sfxBtn=$('#sfxBtn'), musBtn=$('#musBtn');
 const paintSnd=()=>{ sfxBtn.textContent=SND.sfx?'🔊 Sounds on':'🔇 Sounds off'; sfxBtn.classList.toggle('on',SND.sfx); musBtn.textContent=SND.musOn?'🎶 Disco Jingle: on':'🎶 Disco Jingle: off'; musBtn.classList.toggle('on',SND.musOn); };
@@ -275,7 +306,10 @@ const DEMO = location.hash==='#demo';
     loaded={cfg:true,claims:true,items:true}; tab='giftee';
     db={doc:()=>({set:async()=>{throw{code:'demo'}},get:async()=>({exists:false,data:()=>undefined}),delete:async()=>{throw{code:'demo'}}}),collection:()=>({add:async()=>{throw{code:'demo'}}})};
     $('#motherBtn').style.display='none';
-    document.querySelector('footer').insertAdjacentHTML('afterbegin','<div style="color:var(--gold);font-weight:700;margin-bottom:6px">DEMO MODE: nothing is saved. Spin again by tapping “Hide it again”.</div>');
+    document.querySelector('footer').insertAdjacentHTML('afterbegin','<div style="color:var(--gold);font-weight:700;margin-bottom:6px">DEMO MODE: nothing is saved. Spin again by tapping “Hide it again”.</div><div class="btns" style="justify-content:center;margin:0 0 10px"><button class="btn ghost small" id="tJoin">Hear: join</button><button class="btn ghost small" id="tSave">Hear: wish saved</button><button class="btn ghost small" id="tOver">Hear: over budget</button></div>');
+    $('#tJoin').onclick=()=>{ SND.play('snap'); setTimeout(()=>SND.play('oooh'),150); SND.say('join',{n:'Grant'}); };
+    $('#tSave').onclick=()=>{ SND.play('sparkle'); SND.say('saved'); };
+    $('#tOver').onclick=()=>{ SND.play('buzz'); SND.say('over'); };
     setTimeout(render,0); return;
   }
   if(!FIREBASE_CONFIG.apiKey){ app.innerHTML=`<div class="card empty"><div class="big">🔧</div>Almost there — the Firebase config still needs pasting into index.html.</div>`; return; }
@@ -348,7 +382,7 @@ function bindPick(){
         const s=await db.doc('claims/'+k).get();
         if(s.exists && s.data().pinHash){ if(s.data().pinHash!==h) return toast('Wrong PIN. Ask Mother to reset it if you forgot.'); }
         else await db.doc('claims/'+k).set({...(s.exists?s.data():{}),pinHash:h});
-        SND.play('snap'); LS.set('me',k); closeModal(); tab='list'; toast(`Welcome to the stage, ${nm}! 💖`); render();
+        SND.play('snap'); setTimeout(()=>SND.play('oooh'),150); SND.say('join',{n:nm}); LS.set('me',k); closeModal(); tab='list'; toast(`Welcome to the stage, ${nm}! 💖`); render();
       }catch(e){ writeFail(e); }
     };
   });
@@ -388,7 +422,7 @@ function bindList(me){
     try{ const a=await shrink(f,240,true); await db.doc('claims/'+me).set({...(claimData[me]||{}),avatar:a}); toast('Headshot saved 📸'); }catch(err){ writeFail(err); } };
   app.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>itemForm(me, items.find(i=>i.id===b.dataset.edit)));
   app.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>confirmBox('Delete this wish?','Gone like last season\'s wig.',async()=>{
-    try{ await db.doc('items/'+b.dataset.del).delete(); toast('Deleted.'); }catch(e){ writeFail(e); }
+    try{ await db.doc('items/'+b.dataset.del).delete(); toast('Deleted.'); SND.say('del'); }catch(e){ writeFail(e); }
   }));
 }
 function itemForm(me, it){
@@ -403,7 +437,7 @@ function itemForm(me, it){
     ${img?`<button class="btn ghost small" id="fRm" style="margin-top:6px">Remove photo</button>`:''}
     <label>Notes — size, colour, “absolutely not beige”</label><textarea id="fN" maxlength="400">${esc(it?.note||'')}</textarea>
     <div class="btns"><button class="btn pink" id="fSave">Save</button><button class="btn ghost" id="fCancel">Cancel</button></div>`);
-  const chk=()=>{ const v=Number($('#fP').value); if(cfg.limit && v>Number(cfg.limit) && !chk._o){ SND.play('buzz'); } chk._o = cfg.limit && v>Number(cfg.limit);
+  const chk=()=>{ const v=Number($('#fP').value); if(cfg.limit && v>Number(cfg.limit) && !chk._o){ SND.play('buzz'); SND.say('over'); } chk._o = cfg.limit && v>Number(cfg.limit);
     $('#fOver').innerHTML = (cfg.limit && v>Number(cfg.limit)) ? `<span class="over" style="margin:6px 0 0">${QUIPS_OVER[Math.floor(v)%QUIPS_OVER.length]}</span>`:''; };
   $('#fP').oninput=chk; chk();
   $('#fI').onchange=async e=>{ const f=e.target.files[0]; if(!f) return; try{ img=await shrink(f); $('#fPrev').innerHTML=`<img class="preview" src="${img}">`; }catch{ toast('Couldn\'t read that image.'); } };
@@ -414,7 +448,7 @@ function itemForm(me, it){
     const p=$('#fP').value.trim();
     const data={owner:me,title,price:p===''?'':Number(p),link:$('#fL').value.trim(),note:$('#fN').value.trim(),img,ts:it?.ts||Date.now()};
     $('#fSave').disabled=true;
-    try{ await (it?db.doc('items/'+it.id).set(data):db.collection('items').add(data)); closeModal(); toast(it?'Updated ✨':'Added to the runway ✨'); SND.play('sparkle'); }
+    try{ await (it?db.doc('items/'+it.id).set(data):db.collection('items').add(data)); closeModal(); toast(it?'Updated ✨':'Added to the runway ✨'); SND.play('sparkle'); SND.say('saved'); }
     catch(e){ $('#fSave').disabled=false; writeFail(e); }
   };
 }
@@ -481,11 +515,11 @@ function bindGiftee(){
     if(spinning) return; spinning=true; sp.disabled=true;
     const jitter=(Math.random()-.5)*step*0.6;
     const target = 360*(6+Math.floor(Math.random()*3)) + restAt + jitter;
-    SND.play('spin',5.5);
+    SND.play('spin',5.5); SND.say('spin');
     void cv.offsetWidth;
     cv.style.transition='transform 5.5s cubic-bezier(.12,.75,.12,1)';
     cv.style.transform=`rotate(${target}deg)`;
-    setTimeout(()=>{ spinning=false; revealed=true; wheelRot=0; SND.play('fanfare'); confetti(); render(); },5700);
+    setTimeout(()=>{ spinning=false; revealed=true; wheelRot=0; SND.play('fanfare'); setTimeout(()=>SND.play('applause'),350); setTimeout(()=>SND.say('reveal',{g:nameOf(g)}),900); confetti(); render(); },5700);
   };
   const h=$('#hide'); if(h) h.onclick=()=>{ revealed=false; render(); };
 }
@@ -562,7 +596,7 @@ function bindAdmin(){
   const d=$('#aDraw'); if(d) d.onclick=()=>{
     const go=async()=>{ SND.play('whoosh'); const pairs=drawNames(people().map(p=>p.k), cfg.exclusions||[]);
       if(!pairs) return toast('No valid draw with those “never pair” rules. Loosen one.');
-      try{ await db.doc('config/main').set({...cfg, drawn:true, pairs, drawnAt:Date.now()}); toast('Names drawn! Tell the girls to check “My giftee” 🎁'); }catch(e){ writeFail(e); } };
+      try{ await db.doc('config/main').set({...cfg, drawn:true, pairs, drawnAt:Date.now()}); toast('Names drawn! Tell the girls to check “My giftee” 🎁'); SND.play('oooh'); SND.say('drawn'); }catch(e){ writeFail(e); } };
     cfg.drawn ? confirmBox('Redraw everyone?','Everyone gets a new giftee. Anyone who already looked will need to look again.',go) : go();
   };
   const u=$('#aUndraw'); if(u) u.onclick=()=>confirmBox('Cancel the draw?','Clears all assignments.',async()=>{
