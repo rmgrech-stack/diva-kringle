@@ -1,0 +1,11 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Diva Kringle: open to anyone with the link, until 1 Feb 2027.
+    match /{col}/{id} {
+      allow read: if col in ['config', 'claims', 'items'];
+      allow write: if col in ['config', 'claims', 'items']
+                   && request.time < timestamp.date(2027, 2, 1);
+    }
+  }
+}
