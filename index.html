@@ -120,6 +120,8 @@ textarea{min-height:64px;resize:vertical}
 .meRow{display:flex;align-items:center;gap:12px}
 .confetti{position:fixed;top:-10px;width:9px;height:14px;z-index:7;pointer-events:none;animation:conf 2.6s ease-in forwards}
 @keyframes conf{to{transform:translateY(105vh) rotate(720deg);opacity:.2}}
+.sndbtn{font:inherit;font-size:13px;color:var(--ink);cursor:pointer}
+.sndbtn.on{border-color:var(--pink2);box-shadow:0 0 12px rgba(255,46,147,.5)}
 .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(100px);background:#111;border:1px solid var(--gold);color:var(--ink);
   padding:12px 18px;border-radius:14px;z-index:9;transition:transform .3s;font-weight:500;max-width:90vw;text-align:center}
 .toast.show{transform:translateX(-50%) translateY(0)}
@@ -147,6 +149,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:30px}
     <div class="script">a very camp Christmas</div>
     <div class="tag">Sequins · snow · zero regifts</div>
     <div class="marquee" id="marquee"></div>
+    <div class="marquee"><button class="chip sndbtn" id="sfxBtn">🔊 Sounds on</button><button class="chip sndbtn" id="musBtn">🎶 Disco Jingle: off</button></div>
   </header>
   <nav id="nav"></nav>
   <main id="app"><div class="card empty"><div class="big">✨</div>Warming up the spotlight…</div></main>
@@ -196,6 +199,7 @@ const people = () => cfg?.people || [];
 const nameOf = k => people().find(p=>p.k===k)?.name || '???';
 const myKey = () => { if(typeof DEMO!=='undefined' && DEMO) return 'd5'; const k=LS.get('me'); return (k && claims[k] && people().some(p=>p.k===k)) ? k : null; };
 
+
 // ---------- boot (Firebase) ----------
 const LS={get:k=>{try{return localStorage.getItem('dk_'+k)}catch{return null}},set:(k,v)=>{try{v==null?localStorage.removeItem('dk_'+k):localStorage.setItem('dk_'+k,v)}catch{}}};
 async function sha(t){ const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('divakringle:'+t)); return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join(''); }
@@ -204,6 +208,61 @@ function makeDb(fs){ return {
   doc:p=>({ onSnapshot:(n,e)=>fsnap(fdoc(fs,p),s=>n(wrapDoc(s)),e), set:d=>setDoc(fdoc(fs,p),d), get:async()=>wrapDoc(await getDoc(fdoc(fs,p))), delete:()=>deleteDoc(fdoc(fs,p)) }),
   collection:c=>({ onSnapshot:(n,e)=>fsnap(fcol(fs,c),s=>n({docs:s.docs.map(d=>({id:d.id,exists:true,data:()=>d.data()})),metadata:s.metadata}),e), add:d=>addDoc(fcol(fs,c),d) })
 };}
+// ---------- sound (all generated live, no recordings) ----------
+const SND=(()=>{
+  let ac=null, master=null, sfxOn=(LS.get('sfx')!=='0'), musOn=false, musTimer=null, nextT=0, step=0;
+  const ctx=()=>{ if(!ac){ try{ ac=new (window.AudioContext||window.webkitAudioContext)(); master=ac.createGain(); master.gain.value=.55; master.connect(ac.destination);}catch{ return null; } } if(ac.state==='suspended') ac.resume(); return ac; };
+  function tone(f,t,d,{type='sine',vol=.25,glide=0,attack=.005,cut=0}={}){ const a=ctx(); if(!a) return; const o=a.createOscillator(), g=a.createGain(); o.type=type; o.frequency.setValueAtTime(f,t); if(glide) o.frequency.exponentialRampToValueAtTime(glide,t+d);
+    let node=o; if(cut){ const fl=a.createBiquadFilter(); fl.type='lowpass'; fl.frequency.value=cut; o.connect(fl); node=fl; }
+    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(vol,t+attack); g.gain.exponentialRampToValueAtTime(.0001,t+d); node.connect(g); g.connect(master); o.start(t); o.stop(t+d+.05); }
+  let nbuf=null; function noise(t,d,{vol=.2,hp=0,bp=0}={}){ const a=ctx(); if(!a) return; if(!nbuf){ nbuf=a.createBuffer(1,a.sampleRate,a.sampleRate); const c=nbuf.getChannelData(0); for(let i=0;i<c.length;i++) c[i]=Math.random()*2-1; }
+    const s=a.createBufferSource(); s.buffer=nbuf; let node=s; if(hp){const f=a.createBiquadFilter(); f.type='highpass'; f.frequency.value=hp; node.connect(f); node=f;} if(bp){const f=a.createBiquadFilter(); f.type='bandpass'; f.frequency.value=bp; f.Q.value=1.2; node.connect(f); node=f;}
+    const g=a.createGain(); g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(.0001,t+d); node.connect(g); g.connect(master); s.start(t); s.stop(t+d+.05); }
+  const now=()=>ctx()?.currentTime||0;
+  const fx={
+    sparkle(){ const t=now(); [1568,2093,2637,3136].forEach((f,i)=>tone(f,t+i*.05,.25,{vol:.12})); },
+    tap(){ tone(880,now(),.08,{type:'triangle',vol:.12}); },
+    snap(){ const t=now(); noise(t,.06,{vol:.5,bp:2500}); noise(t+.11,.06,{vol:.5,bp:2800}); },
+    buzz(){ const t=now(); tone(220,t,.22,{type:'square',vol:.12,glide:180,cut:1200}); tone(185,t+.25,.35,{type:'square',vol:.12,glide:140,cut:1200}); },
+    whoosh(){ const t=now(); noise(t,.5,{vol:.25,bp:800}); },
+    spin(dur){ const a=ctx(); if(!a) return; const t0=a.currentTime; // decelerating ticks
+      let t=0, n=0; while(t<dur-.1 && n<90){ const p=t/dur; const gap=.035+Math.pow(p,2.2)*.42; noise(t0+t,.03,{vol:.35,hp:3000}); tone(1200,t0+t,.03,{type:'square',vol:.04}); t+=gap; n++; }
+      for(let i=0;i<dur*16;i++) noise(t0+i/16,.07,{vol:.05+.08*(i/(dur*16)),bp:180}); },
+    fanfare(){ const a=ctx(); if(!a) return; const t=a.currentTime+.05;
+      noise(t,.12,{vol:.5,bp:200}); tone(60,t,.25,{vol:.6,glide:40});
+      [[523,0],[659,.12],[784,.24]].forEach(([f,d])=>{ tone(f,t+d,.18,{type:'sawtooth',vol:.12,cut:2400}); tone(f*1.005,t+d,.18,{type:'sawtooth',vol:.08,cut:2400}); });
+      [523,659,784,1047].forEach(f=>{ tone(f,t+.4,1.4,{type:'sawtooth',vol:.09,cut:2200,attack:.03}); tone(f*1.006,t+.4,1.4,{type:'sawtooth',vol:.06,cut:2200,attack:.03}); });
+      noise(t+.4,1.6,{vol:.25,hp:6000}); [2093,2637,3136,4186].forEach((f,i)=>tone(f,t+.5+i*.07,.5,{vol:.07})); }
+  };
+  // Disco Jingle Bells (public-domain melody) with a four-on-the-floor beat
+  const N={C5:523.25,D5:587.33,E5:659.25,F5:698.46,G5:783.99,C4:261.63,G3:196,F3:174.61,C3:130.81,D4:293.66,A3:220};
+  const MEL=[['E5',1],['E5',1],['E5',2],['E5',1],['E5',1],['E5',2],['E5',1],['G5',1],['C5',1.5],['D5',.5],['E5',4],
+    ['F5',1],['F5',1],['F5',1.5],['F5',.5],['F5',1],['E5',1],['E5',1],['E5',.5],['E5',.5],['E5',1],['D5',1],['D5',1],['E5',1],['D5',2],['G5',2],
+    ['E5',1],['E5',1],['E5',2],['E5',1],['E5',1],['E5',2],['E5',1],['G5',1],['C5',1.5],['D5',.5],['E5',4],
+    ['F5',1],['F5',1],['F5',1.5],['F5',.5],['F5',1],['E5',1],['E5',1],['E5',.5],['E5',.5],['G5',1],['G5',1],['F5',1],['D5',1],['C5',4]];
+  const BASS=['C3','C3','C3','C3','F3','F3','C3','C3','F3','F3','C3','C3','D4','D4','G3','G3','C3','C3','C3','C3','F3','F3','C3','C3','F3','F3','C3','C3','G3','G3','C3','C3'];
+  const E8=60/124/2; // eighth note
+  let melTimes=[]; { let acc=0; MEL.forEach(([n,d])=>{ melTimes.push([acc,n,d]); acc+=d; }); }
+  const LOOP=64; // eighths
+  let loopStart=0;
+  function schedule(){ const a=ctx(); if(!a||!musOn) return;
+    while(nextT < a.currentTime+.25){ const e=step%LOOP; if(e===0) loopStart=nextT;
+      if(e%2===0){ tone(110,nextT,.18,{vol:.5,glide:45}); } // kick on quarters
+      if(e%2===1){ noise(nextT,.05,{vol:.12,hp:7000}); }    // offbeat hat
+      if(e%4===2){ noise(nextT,.12,{vol:.18,bp:1800}); }    // clap on 2 & 4
+      if(e%2===0){ const b=N[BASS[(e/2)%BASS.length]]; tone(b,nextT,E8*.9,{type:'sawtooth',vol:.09,cut:600}); tone(b*2,nextT+E8,E8*.8,{type:'sawtooth',vol:.06,cut:700}); }
+      melTimes.forEach(([at,n,d])=>{ if(at===e) { tone(N[n],nextT,d*E8*.95,{type:'square',vol:.06,cut:3000}); tone(N[n]*2,nextT,d*E8*.6,{vol:.03}); } });
+      nextT+=E8; step++; } }
+  function music(on){ musOn=on; clearInterval(musTimer); if(on){ const a=ctx(); if(!a) return; nextT=a.currentTime+.1; step=0; musTimer=setInterval(schedule,60); } }
+  return { play:(k,...a)=>{ if(sfxOn) try{ fx[k](...a); }catch{} }, setSfx:v=>{sfxOn=v; LS.set('sfx',v?'1':'0');}, get sfx(){return sfxOn}, music, get musOn(){return musOn} };
+})();
+const sfxBtn=$('#sfxBtn'), musBtn=$('#musBtn');
+const paintSnd=()=>{ sfxBtn.textContent=SND.sfx?'🔊 Sounds on':'🔇 Sounds off'; sfxBtn.classList.toggle('on',SND.sfx); musBtn.textContent=SND.musOn?'🎶 Disco Jingle: on':'🎶 Disco Jingle: off'; musBtn.classList.toggle('on',SND.musOn); };
+sfxBtn.onclick=()=>{ SND.setSfx(!SND.sfx); paintSnd(); SND.play('sparkle'); };
+musBtn.onclick=()=>{ SND.music(!SND.musOn); paintSnd(); };
+paintSnd();
+document.addEventListener('click',e=>{ if(e.target.closest('nav button,.name')) SND.play('tap'); },true);
+
 const DEMO = location.hash==='#demo';
 (function boot(){
   if(DEMO){
@@ -217,7 +276,7 @@ const DEMO = location.hash==='#demo';
     db={doc:()=>({set:async()=>{throw{code:'demo'}},get:async()=>({exists:false,data:()=>undefined}),delete:async()=>{throw{code:'demo'}}}),collection:()=>({add:async()=>{throw{code:'demo'}}})};
     $('#motherBtn').style.display='none';
     document.querySelector('footer').insertAdjacentHTML('afterbegin','<div style="color:var(--gold);font-weight:700;margin-bottom:6px">DEMO MODE: nothing is saved. Spin again by tapping “Hide it again”.</div>');
-    render(); return;
+    setTimeout(render,0); return;
   }
   if(!FIREBASE_CONFIG.apiKey){ app.innerHTML=`<div class="card empty"><div class="big">🔧</div>Almost there — the Firebase config still needs pasting into index.html.</div>`; return; }
   const timer = setTimeout(()=>{ if(!loaded.cfg) app.innerHTML = `<div class="card empty"><div class="big">💅</div>Can't reach the stage yet. Check your connection, darling.</div>`; },10000);
@@ -289,7 +348,7 @@ function bindPick(){
         const s=await db.doc('claims/'+k).get();
         if(s.exists && s.data().pinHash){ if(s.data().pinHash!==h) return toast('Wrong PIN. Ask Mother to reset it if you forgot.'); }
         else await db.doc('claims/'+k).set({...(s.exists?s.data():{}),pinHash:h});
-        LS.set('me',k); closeModal(); tab='list'; toast(`Welcome to the stage, ${nm}! 💖`); render();
+        SND.play('snap'); LS.set('me',k); closeModal(); tab='list'; toast(`Welcome to the stage, ${nm}! 💖`); render();
       }catch(e){ writeFail(e); }
     };
   });
@@ -344,7 +403,8 @@ function itemForm(me, it){
     ${img?`<button class="btn ghost small" id="fRm" style="margin-top:6px">Remove photo</button>`:''}
     <label>Notes — size, colour, “absolutely not beige”</label><textarea id="fN" maxlength="400">${esc(it?.note||'')}</textarea>
     <div class="btns"><button class="btn pink" id="fSave">Save</button><button class="btn ghost" id="fCancel">Cancel</button></div>`);
-  const chk=()=>{ const v=Number($('#fP').value); $('#fOver').innerHTML = (cfg.limit && v>Number(cfg.limit)) ? `<span class="over" style="margin:6px 0 0">${QUIPS_OVER[Math.floor(v)%QUIPS_OVER.length]}</span>`:''; };
+  const chk=()=>{ const v=Number($('#fP').value); if(cfg.limit && v>Number(cfg.limit) && !chk._o){ SND.play('buzz'); } chk._o = cfg.limit && v>Number(cfg.limit);
+    $('#fOver').innerHTML = (cfg.limit && v>Number(cfg.limit)) ? `<span class="over" style="margin:6px 0 0">${QUIPS_OVER[Math.floor(v)%QUIPS_OVER.length]}</span>`:''; };
   $('#fP').oninput=chk; chk();
   $('#fI').onchange=async e=>{ const f=e.target.files[0]; if(!f) return; try{ img=await shrink(f); $('#fPrev').innerHTML=`<img class="preview" src="${img}">`; }catch{ toast('Couldn\'t read that image.'); } };
   if($('#fRm')) $('#fRm').onclick=()=>{ img=''; $('#fPrev').innerHTML=''; };
@@ -354,7 +414,7 @@ function itemForm(me, it){
     const p=$('#fP').value.trim();
     const data={owner:me,title,price:p===''?'':Number(p),link:$('#fL').value.trim(),note:$('#fN').value.trim(),img,ts:it?.ts||Date.now()};
     $('#fSave').disabled=true;
-    try{ await (it?db.doc('items/'+it.id).set(data):db.collection('items').add(data)); closeModal(); toast(it?'Updated ✨':'Added to the runway ✨'); }
+    try{ await (it?db.doc('items/'+it.id).set(data):db.collection('items').add(data)); closeModal(); toast(it?'Updated ✨':'Added to the runway ✨'); SND.play('sparkle'); }
     catch(e){ $('#fSave').disabled=false; writeFail(e); }
   };
 }
@@ -421,10 +481,11 @@ function bindGiftee(){
     if(spinning) return; spinning=true; sp.disabled=true;
     const jitter=(Math.random()-.5)*step*0.6;
     const target = 360*(6+Math.floor(Math.random()*3)) + restAt + jitter;
+    SND.play('spin',5.5);
     void cv.offsetWidth;
     cv.style.transition='transform 5.5s cubic-bezier(.12,.75,.12,1)';
     cv.style.transform=`rotate(${target}deg)`;
-    setTimeout(()=>{ spinning=false; revealed=true; wheelRot=0; confetti(); render(); },5700);
+    setTimeout(()=>{ spinning=false; revealed=true; wheelRot=0; SND.play('fanfare'); confetti(); render(); },5700);
   };
   const h=$('#hide'); if(h) h.onclick=()=>{ revealed=false; render(); };
 }
@@ -499,7 +560,7 @@ function bindAdmin(){
   const pl=$('#aPlay'); if(pl) pl.onclick=()=>{ tab=myKey()?'list':'pick'; render(); };
   const lo=$('#aOut'); if(lo) lo.onclick=()=>{ LS.set('admin',null); isOwner=false; tab=myKey()?'list':'pick'; render(); };
   const d=$('#aDraw'); if(d) d.onclick=()=>{
-    const go=async()=>{ const pairs=drawNames(people().map(p=>p.k), cfg.exclusions||[]);
+    const go=async()=>{ SND.play('whoosh'); const pairs=drawNames(people().map(p=>p.k), cfg.exclusions||[]);
       if(!pairs) return toast('No valid draw with those “never pair” rules. Loosen one.');
       try{ await db.doc('config/main').set({...cfg, drawn:true, pairs, drawnAt:Date.now()}); toast('Names drawn! Tell the girls to check “My giftee” 🎁'); }catch(e){ writeFail(e); } };
     cfg.drawn ? confirmBox('Redraw everyone?','Everyone gets a new giftee. Anyone who already looked will need to look again.',go) : go();
