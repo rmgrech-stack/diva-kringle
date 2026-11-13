@@ -645,7 +645,7 @@ function confirmBox(title,msg,yes){
 function writeFail(e){
   if(e?.code==='demo') return toast('Demo mode: nothing is saved.');
   if(e?.code==='permission-denied') toast('The database said no. Mother needs to check the Firestore rules.');
-  else toast('That didn\'t save. Try again in a sec.');
+  else { console.error('save failed',e); toast('That didn\'t save ('+(e?.code||e?.message||'unknown')+'). Screenshot this for Claude.'); }
 }
 })();
 </script>
