@@ -280,8 +280,23 @@ const SND=(()=>{
     over_draw:[]
   };
   let lastSay=0, lastLine='';
+  // ---- recorded clips (audio/*.mp3, listed in audio/clips.json) ----
+  let CLIPS={}; const bufs={};
+  fetch('audio/clips.json',{cache:'no-store'}).then(r=>r.ok?r.json():{}).then(j=>{CLIPS=j||{};}).catch(()=>{});
+  async function buf(file){ const a=ctx(); if(!a) return null; if(!bufs[file]) bufs[file]=fetch('audio/'+file).then(r=>r.arrayBuffer()).then(b=>new Promise((res,rej)=>a.decodeAudioData(b,res,rej))).catch(()=>null); return bufs[file]; }
+  function preload(){ Object.values(CLIPS).flat().forEach(f=>buf(f)); }
+  async function playClip(file,when=0){ const a=ctx(); const b=await buf(file); if(!a||!b) return 0; const s=a.createBufferSource(); s.buffer=b; const g=a.createGain(); g.gain.value=1.6; s.connect(g); g.connect(master); s.start(a.currentTime+when); return b.duration; }
+  async function clipOr(kind,vars,fixed){ // returns true if a clip handled it
+    const list=CLIPS[kind]; if(!list?.length) return false;
+    const f=list[Math.floor(Math.random()*list.length)];
+    const d=await playClip(f); if(!d) return false;
+    if(kind==='reveal' && vars.k){ const nf=(CLIPS.names||[]).find(x=>x==='name-'+vars.k+'.mp3'); if(nf) await playClip(nf,d+.15);
+      else setTimeout(()=>ttsRaw(`It's ${vars.g}!`),(d+.15)*1000); }
+    if(kind==='join' && vars.n){ setTimeout(()=>ttsRaw(vars.n+'!'),(d+.1)*1000); }
+    return true; }
   function pickLine(kind,vars={}){ const L=LINES[kind]||['']; return L[Math.floor(Math.random()*L.length)].replace('{g}',vars.g||'').replace('{n}',vars.n||''); }
-  function say(kind,vars={},fixed){ if(!sfxOn) return; try{ const L=LINES[kind]; if(!L?.length||!('speechSynthesis' in window)) return;
+  function ttsRaw(line){ try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(line); if(voice) u.voice=voice; u.lang=voice?.lang||'en-AU'; u.pitch=1.35; u.rate=1.02; speechSynthesis.speak(u);}catch{} }
+  async function say(kind,vars={},fixed){ if(!sfxOn) return; if(kind==='over' && Date.now()-lastSay<4000) return; preload(); if(await clipOr(kind,vars,fixed)){ lastSay=Date.now(); return; } try{ const L=LINES[kind]; if(!L?.length||!('speechSynthesis' in window)) return;
       if(kind==='over' && Date.now()-lastSay<4000) return; lastSay=Date.now();
       let line=fixed||pickLine(kind,vars);
       lastLine=line; speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(line); if(voice) u.voice=voice; u.lang=voice?.lang||'en-AU';
@@ -520,7 +535,7 @@ function bindGiftee(){
     void cv.offsetWidth;
     cv.style.transition='transform 5.5s cubic-bezier(.12,.75,.12,1)';
     cv.style.transform=`rotate(${target}deg)`;
-    setTimeout(()=>{ spinning=false; revealed=true; wheelRot=0; SND.play('fanfare'); setTimeout(()=>SND.play('applause'),350); revealLine=SND.pickLine('reveal',{g:nameOf(g)}); setTimeout(()=>SND.say('reveal',{},revealLine),900); confetti(); render(); },5700);
+    setTimeout(()=>{ spinning=false; revealed=true; wheelRot=0; SND.play('fanfare'); setTimeout(()=>SND.play('applause'),350); revealLine=SND.pickLine('reveal',{g:nameOf(g)}); setTimeout(()=>SND.say('reveal',{g:nameOf(g),k:nameOf(g).split(' ')[0].toLowerCase()},revealLine),900); confetti(); render(); },5700);
   };
   const h=$('#hide'); if(h) h.onclick=()=>{ revealed=false; render(); };
 }
