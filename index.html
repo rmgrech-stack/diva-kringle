@@ -562,7 +562,7 @@ function adminView(first){
     <div class="row"><div><label>Gift limit</label><input id="aLim" type="number" inputmode="decimal" min="0" value="${esc(draft.limit)}"></div>
     <div style="max-width:90px"><label>Currency</label><input id="aCur" maxlength="3" value="${esc(draft.currency)}"></div></div>
     ${first&&!cfg?.adminHash?`<label>Mother password (unlocks this desk — don't lose it)</label><input id="aPw" type="password" placeholder="at least 6 characters">`:''}
-    <label>Exchange date / place</label><input id="aDate" maxlength="60" placeholder="e.g. Sat 20 Dec, Ray's place" value="${esc(draft.dateText)}">
+    <label>Exchange date / place (everyone sees this)</label><input id="aDate" maxlength="60" placeholder="e.g. Sat 20 Dec, Ray's place" value="${esc(draft.dateText)}">
     <label>The divas</label><div class="plist" id="plist">${draft.people.map((p,i)=>`<div class="prow"><input data-pi="${i}" maxlength="24" placeholder="Name" value="${esc(p.name)}">
       <span class="st">${claims[p.k]?.pinHash||claimData[p.k]?.pinHash?'joined ✓':''}</span>
       ${claims[p.k]&&!first?`<button class="btn ghost small" data-unclaim="${p.k}" title="Clear their PIN">Reset PIN</button>`:''}
@@ -578,6 +578,8 @@ function adminView(first){
       <p class="sub">${cfg?.drawn?'Names are drawn. Each diva sees only their own giftee. Redrawing reshuffles everyone, so only do it if someone joins or drops out.':'Everyone gets one giftee, nobody gets themselves, and your “never pair” rules are respected. You\'ll find out who you got the same way as everyone else.'}</p>
       <p class="muted">${Object.keys(claims).length} of ${people().length} have joined.</p>
       <div class="btns"><button class="btn pink" id="aDraw">${cfg?.drawn?'Redraw names':'Draw names ✨'}</button>${cfg?.drawn?`<button class="btn ghost" id="aUndraw">Cancel draw</button>`:''}</div></div>
+      <div class="card"><h3>Change Mother password</h3><p class="sub">Pick something only you know. You'll stay logged in on this phone.</p>
+      <input id="aNewPw" type="password" placeholder="new password, 6+ characters"><div class="btns"><button class="btn small" id="aPwSave">Update password</button></div></div>
       <div class="card"><h3>Inviting the girls</h3><p class="sub" style="margin:0">Just send them this page's link. They tap their name, set a PIN and start their list. Pick your own name too — Mother plays as well.</p>
       <div class="btns"><button class="btn ghost small" id="aPlay">Go pick my name</button><button class="btn ghost small" id="aOut">Lock Mother's desk</button></div></div>`}`;
 }
@@ -607,6 +609,9 @@ function bindAdmin(){
       exclusions:draft.exclusions.filter(x=>keys.has(x[0])&&keys.has(x[1])), drawn:cfg?.drawn||false, pairs:cfg?.pairs||{}, adminHash};
     try{ await db.doc('config/main').set(next); draft=null; toast('Saved. The stage is set 💅'); }catch(e){ writeFail(e); }
   };
+  const pw=$('#aPwSave'); if(pw) pw.onclick=async()=>{ const v=$('#aNewPw').value; if(v.length<6) return toast('6+ characters, darling.');
+    if(/password/i.test(v)) return toast('Something less guessable, Mother.');
+    const h=await sha('admin:'+v); try{ await db.doc('config/main').set({...cfg, adminHash:h}); LS.set('admin',h); $('#aNewPw').value=''; toast('Mother password updated 🔐'); SND.play('sparkle'); }catch(e){ writeFail(e); } };
   const pl=$('#aPlay'); if(pl) pl.onclick=()=>{ tab=myKey()?'list':'pick'; render(); };
   const lo=$('#aOut'); if(lo) lo.onclick=()=>{ LS.set('admin',null); isOwner=false; tab=myKey()?'list':'pick'; render(); };
   const d=$('#aDraw'); if(d) d.onclick=()=>{
