@@ -194,7 +194,7 @@ const cur = () => (cfg?.currency || '$');
 const money = n => (n===''||n==null||isNaN(n)) ? '' : cur()+Number(n).toLocaleString(undefined,{maximumFractionDigits:2});
 const people = () => cfg?.people || [];
 const nameOf = k => people().find(p=>p.k===k)?.name || '???';
-const myKey = () => { if(typeof DEMO!=='undefined' && DEMO) return 'd6'; const k=LS.get('me'); return (k && claims[k] && people().some(p=>p.k===k)) ? k : null; };
+const myKey = () => { if(typeof DEMO!=='undefined' && DEMO) return 'd5'; const k=LS.get('me'); return (k && claims[k] && people().some(p=>p.k===k)) ? k : null; };
 
 // ---------- boot (Firebase) ----------
 const LS={get:k=>{try{return localStorage.getItem('dk_'+k)}catch{return null}},set:(k,v)=>{try{v==null?localStorage.removeItem('dk_'+k):localStorage.setItem('dk_'+k,v)}catch{}}};
@@ -207,8 +207,8 @@ function makeDb(fs){ return {
 const DEMO = location.hash==='#demo';
 (function boot(){
   if(DEMO){
-    const ppl=['Grant','Ray','Matt','Peter','Zach','Ben','Ray G (Mother)'].map((n,i)=>({k:'d'+i,name:n}));
-    const pairs={}; ppl.forEach((p,i)=>pairs[p.k]=ppl[(i+3)%7].k);
+    const ppl=['Grant','Matt','Peter','Zach','Ben','Ray (Mother)'].map((n,i)=>({k:'d'+i,name:n}));
+    const pairs={}; ppl.forEach((p,i)=>pairs[p.k]=ppl[(i+2)%6].k);
     cfg={limit:150,currency:'A$',dateText:'Demo mode',people:ppl,exclusions:[],drawn:true,pairs};
     ppl.forEach(p=>{claims[p.k]=true; claimData[p.k]={pinHash:'x'};});
     items=[{id:'x1',owner:'d2',title:'Sequin bomber jacket',price:120,note:'Size L, gold please',link:'https://example.com'},
@@ -443,7 +443,7 @@ function allView(me){
 let draft=null;
 function adminView(first){
   if(!draft) draft = { limit: cfg?.limit ?? 150, currency: cfg?.currency || 'A$', dateText: cfg?.dateText || '',
-    people: cfg?.people?.length ? cfg.people.map(p=>({...p})) : ['Grant','Ray','Matt','Peter','Zach','Ben','Ray G (Mother)'].map(n=>({k:uid6(),name:n})),
+    people: cfg?.people?.length ? cfg.people.map(p=>({...p})) : ['Grant','Matt','Peter','Zach','Ben','Ray (Mother)'].map(n=>({k:uid6(),name:n})),
     exclusions: (cfg?.exclusions||[]).map(x=>[...x]) };
   if(!draft.people.length) draft.people=[{k:uid6(),name:''}];
   const named = draft.people.filter(p=>p.name.trim());
