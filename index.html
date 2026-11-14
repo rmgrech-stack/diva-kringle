@@ -546,7 +546,12 @@ async function drawWheel(cv, segs){
     else { x.font=`${pr*1.1}px serif`; x.textAlign='center'; x.textBaseline='middle'; x.fillText(s.icon,0,pr*0.08); }
     x.restore(); x.lineWidth=5; x.strokeStyle='#fff1b8'; x.stroke();
     x.fillStyle=dark?'#3a0018':'#fff6fb'; x.font=`bold ${Math.min(30,pr*0.55)}px "DM Sans",sans-serif`; x.textAlign='center'; x.textBaseline='top';
-    x.fillText(s.name.length>12?s.name.slice(0,11)+'…':s.name,0,pr+10);
+    { const maxW=pr*2.3, words=s.name.split(' '), lines=[]; let cur='';
+      words.forEach(w=>{ const t=cur?cur+' '+w:w; if(x.measureText(t).width>maxW && cur){ lines.push(cur); cur=w; } else cur=t; }); if(cur) lines.push(cur);
+      const fs=parseFloat(x.font.match(/(\d+(\.\d+)?)px/)[1]);
+      if(lines.length>1){ x.font=x.font.replace(/\d+(\.\d+)?px/, (fs*.85).toFixed(1)+'px'); }
+      const lh=parseFloat(x.font.match(/(\d+(\.\d+)?)px/)[1])*1.05;
+      lines.slice(0,2).forEach((ln,li)=>x.fillText(ln,0,pr+8+li*lh)); }
     x.restore(); x.restore();
   });
   for(let i=0;i<24;i++){ const t=i/24*2*Math.PI; x.beginPath(); x.arc(R+(R-12)*Math.cos(t),R+(R-12)*Math.sin(t),5,0,2*Math.PI); x.fillStyle=i%2?'#fff1b8':'#ff7ac0'; x.fill(); }
