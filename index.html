@@ -374,7 +374,7 @@ function render(){
   }
   const me = myKey();
   const tabs = [];
-  if(me){ tabs.push(['list','My wishlist'],['giftee','My giftee'],['all','The runway']); }
+  if(me){ tabs.push(['list','My wishlist'],['giftee',cfg.drawn?'My giftee':'The wheel 🎡'],['all','The runway']); }
   if(isOwner) tabs.push(['admin',"Mother's desk"]);
   if(!me && tab!=='admin') tab='pick';
   if(me && tab==='pick') tab='list';
@@ -492,7 +492,7 @@ function shrink(file,M=520,square=false){
 const ICONS=['👑','💄','👠','🪩','💋','🎤','💎','🦩','✨','🌟'];
 let spinning=false, wheelRot=0, revealLine='';
 function gifteeView(me){
-  if(!cfg.drawn || !cfg.pairs?.[me]) return `<div class="card empty"><div class="big">🎰</div>Names haven't been drawn yet. Mother will spin things up soon. Get your wishlist fierce in the meantime.</div>`;
+  if(!cfg.drawn || !cfg.pairs?.[me]) return practiceView();
   const g=cfg.pairs[me], theirs=items.filter(i=>i.owner===g);
   return `<div class="card" style="text-align:center"><h2>Spin the wheel, diva</h2>
     <p class="sub">${revealed?'The wheel has spoken.':'Make sure nobody\'s peeking, then spin.'}</p>
@@ -502,6 +502,26 @@ function gifteeView(me){
       :`<div class="btns" style="justify-content:center"><button class="btn pink" id="spin">Spin ✨</button></div>`}</div>
     ${revealed?`<div class="card"><h2>${esc(nameOf(g))}'s wishlist</h2><p class="sub">${theirs.length?'Pick something they actually asked for. Revolutionary.':'Nothing on their list yet. Give them a nudge without giving the game away.'}</p></div>
     ${theirs.length?`<div class="items">${theirs.map(i=>itemCard(i,false)).join('')}</div>`:''}`:''}`;
+}
+let practiceWin=null;
+function practiceView(){
+  return `<div class="card" style="text-align:center"><h2>The wheel of divas</h2>
+    <p class="sub">Names aren't drawn yet, so this is a <b>practice spin</b> with all ${people().length} of you. It doesn't count, darling.</p>
+    <div class="wheelbox"><div class="pointer"></div><canvas id="wheel" width="680" height="680"></canvas><div class="hub">🪩</div></div>
+    ${practiceWin?`<div style="font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-top:10px">Practice pick</div><div class="result">${esc(nameOf(practiceWin))}</div>`:''}
+    <div class="btns" style="justify-content:center"><button class="btn pink" id="pspin">${practiceWin?'Spin again ✨':'Practice spin ✨'}</button></div>
+    <p class="muted" style="margin-top:10px">No headshot yet? Add one in <b>My wishlist</b> to get your face on the wheel.</p></div>`;
+}
+function bindPractice(){
+  const cv=$('#wheel'); if(!cv) return; const segs=wheelSegs(null), step=360/segs.length;
+  const wi=practiceWin?Math.max(0,segs.findIndex(s=>s.k===practiceWin)):0;
+  cv.style.transition='none'; cv.style.transform=`rotate(${(360-wi*step)%360}deg)`; drawWheel(cv,segs);
+  $('#pspin').onclick=()=>{ if(spinning) return; spinning=true; $('#pspin').disabled=true;
+    const pick=Math.floor(Math.random()*segs.length), rest=(360-pick*step)%360;
+    const target=360*(6+Math.floor(Math.random()*3))+rest+(Math.random()-.5)*step*.6;
+    SND.play('spin',5.5); SND.say('spin'); void cv.offsetWidth;
+    cv.style.transition='transform 5.5s cubic-bezier(.12,.75,.12,1)'; cv.style.transform=`rotate(${target}deg)`;
+    setTimeout(()=>{ spinning=false; practiceWin=segs[pick].k; SND.play('fanfare'); setTimeout(()=>SND.play('applause'),350); confetti(); render(); },5700); };
 }
 function wheelSegs(me){ return people().filter(p=>p.k!==me).map(p=>({k:p.k,name:p.name,avatar:claimData[p.k]?.avatar,icon:ICONS[people().findIndex(q=>q.k===p.k)%ICONS.length]})); }
 const imgCache={};
@@ -532,6 +552,7 @@ async function drawWheel(cv, segs){
   for(let i=0;i<24;i++){ const t=i/24*2*Math.PI; x.beginPath(); x.arc(R+(R-12)*Math.cos(t),R+(R-12)*Math.sin(t),5,0,2*Math.PI); x.fillStyle=i%2?'#fff1b8':'#ff7ac0'; x.fill(); }
 }
 function bindGiftee(){
+  if(!cfg.drawn || !cfg.pairs?.[myKey()]) return bindPractice();
   const me=myKey(), cv=$('#wheel'); if(!cv) return;
   const segs=wheelSegs(me), g=cfg.pairs[me], gi=Math.max(0,segs.findIndex(s=>s.k===g)), step=360/segs.length;
   const restAt = ((360 - gi*step) % 360);
